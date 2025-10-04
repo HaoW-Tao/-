@@ -1,6 +1,5 @@
 import random
 import multiprocessing as mp
-from functools import partial
 
 def P(n):
     if n <= 65:
@@ -14,139 +13,102 @@ def P(n):
     else:
         return 1.0
 
-def P_weapon(n):
-    """武器池五星概率函数"""
-    if n <= 65:
-        return 0.007
-    elif n <= 70:
-        return 0.007 + 0.07 * (n - 65)
-    elif n <= 75:
-        return 0.357 + 0.08 * (n - 70)
-    elif n <= 80:
-        return 0.757 + 0.10 * (n - 75)
-    else:
-        return 1.0
-
 def simulate_task1(num_simulations):
-    """情况1: 抽取一个角色本体与五个回音频段+1把武器，不使用珊瑚"""
+    """情况1: 优先抽取武器池，再抽角色池，不使用珊瑚"""
     total_paid_pulls = 0
     total_coral = 0
     
     for _ in range(num_simulations):
         paid_pulls = 0
         coral = 0
+        
+        # 角色池状态
         character_pity_5 = 0
         character_pity_4 = 0
-        weapon_pity_5 = 0
-        weapon_pity_4 = 0
         character_guaranteed_4_up = False
         character_guaranteed_5_up = False
+        
+        # 武器池状态
+        weapon_pity_5 = 0
+        weapon_pity_4 = 0
         weapon_guaranteed_4_up = False
-        weapon_guaranteed_5_up = False
-        weapon_fate_points = 0
+        
+        # 拥有的角色和武器记录
         owned_4star_chars = {}
         owned_5star_chars = {}
         owned_4star_weapons = {}
-        owned_5star_weapons = {}
+        
+        # 目标计数
         copies_of_up_char = 0
         copies_of_up_weapon = 0
         
         # 角色列表
-        std_4star_chars = [f"std_4char_{i}" for i in range(1, 20)]
-        up_4star_chars_char = [f"up_4char_{i}" for i in range(1, 4)]
+        std_4star_chars = [f"std_4char_{i}" for i in range(1, 9)]  # 8个非UP角色
+        up_4star_chars = [f"up_4char_{i}" for i in range(1, 4)]    # 3个UP角色
         up_5star_char = "up_5char"
-        std_5star_chars = [f"std_5char_{i}" for i in range(1, 6)]
+        std_5star_chars = [f"std_5char_{i}" for i in range(1, 6)]  # 5个非UP五星角色
         
         # 武器列表
-        std_4star_weapons = [f"std_4weapon_{i}" for i in range(1, 21)]
-        up_4star_weapons = [f"up_4weapon_{i}" for i in range(1, 6)]
+        std_4star_weapons = [f"std_4weapon_{i}" for i in range(1, 21)]  # 20个非UP武器
+        up_4star_weapons = [f"up_4weapon_{i}" for i in range(1, 4)]     # 3个UP武器
         up_5star_weapon = "up_5weapon"
-        std_5star_weapons = [f"std_5weapon_{i}" for i in range(1, 6)]
         
-        # 抽取直到获得1个角色本体和5个回音频段+1把武器
-        while not (copies_of_up_char >= 1 and min(copies_of_up_char - 1, 6) >= 5 and copies_of_up_weapon >= 1):
+        # 抽取顺序：先武器池，再角色池
+        # 先抽武器池直到获得1把武器
+        while copies_of_up_weapon < 1:
             paid_pulls += 1
             
-            # 决定抽角色池还是武器池
-            # 如果角色未完成，优先抽角色池
-            if copies_of_up_char < 6:
-                # 模拟角色池抽取
-                n5 = character_pity_5 + 1
-                prob_5 = P(n5)
-                if random.random() < prob_5:
-                    # 获得五星角色
-                    character_pity_5 = 0
-                    character_pity_4 = 0
-                    
-                    # 判断是否为UP角色
-                    if character_guaranteed_5_up:
-                        is_up = True
-                        character_guaranteed_5_up = False
+            # 模拟武器池抽取
+            n5 = weapon_pity_5 + 1
+            prob_5 = P(n5)
+            if random.random() < prob_5:
+                # 获得五星武器 - 必为当期UP武器，且必定为目标武器
+                weapon_pity_5 = 0
+                weapon_pity_4 = 0
+                
+                # 获得UP武器
+                weapon_id = up_5star_weapon
+                copies_of_up_weapon += 1
+                
+                # 计算珊瑚 - 每次获取五星武器固定15珊瑚
+                coral += 15
+            else:
+                weapon_pity_5 = n5
+                
+                # 检查四星
+                if weapon_pity_4 >= 9:
+                    obtained_4star = True
+                    weapon_pity_4 = 0
+                else:
+                    if random.random() < 0.06:
+                        obtained_4star = True
+                        weapon_pity_4 = 0
                     else:
-                        if random.random() < 0.5:
+                        obtained_4star = False
+                        weapon_pity_4 += 1
+                
+                if obtained_4star:
+                    if weapon_guaranteed_4_up:
+                        is_up = True
+                        weapon_guaranteed_4_up = False
+                    else:
+                        if random.random() < 0.5:  # 50%概率为UP武器
                             is_up = True
                         else:
                             is_up = False
-                            character_guaranteed_5_up = True
+                            weapon_guaranteed_4_up = True
                     
                     if is_up:
-                        # 获得UP角色
-                        char_id = up_5star_char
-                        copies_of_up_char += 1
-                        
-                        # 计算珊瑚
-                        if char_id in owned_5star_chars:
-                            count = owned_5star_chars[char_id]
-                            if count < 7:
-                                coral += 15
-                            else:
-                                coral += 40
-                            owned_5star_chars[char_id] += 1
-                        else:
-                            owned_5star_chars[char_id] = 1
-                            coral += 15
+                        # 获得UP四星武器
+                        weapon_id = random.choice(up_4star_weapons)
+                        # 计算珊瑚 - 每次获取四星武器固定3珊瑚
+                        coral += 3
                     else:
-                        # 获得非UP角色
-                        char_id = random.choice(std_5star_chars)
-                        if char_id in owned_5star_chars:
-                            count = owned_5star_chars[char_id]
-                            if count < 7:
-                                coral += 15
-                            else:
-                                coral += 40
-                            owned_5star_chars[char_id] += 1
-                        else:
-                            owned_5star_chars[char_id] = 1
-                            coral += 15
-                else:
-                    character_pity_5 = n5
-                    
-                    # 检查四星
-                    if character_pity_4 >= 9:
-                        obtained_4star = True
-                        character_pity_4 = 0
-                    else:
-                        if random.random() < 0.06:
-                            obtained_4star = True
-                            character_pity_4 = 0
-                        else:
-                            obtained_4star = False
-                            character_pity_4 += 1
-                    
-                    if obtained_4star:
-                        if character_guaranteed_4_up:
-                            is_up = True
-                            character_guaranteed_4_up = False
-                        else:
-                            if random.random() < 0.5:
-                                is_up = True
-                            else:
-                                is_up = False
-                                character_guaranteed_4_up = True
-                        
-                        if is_up:
-                            # 获得UP四星角色
-                            char_id = random.choice(up_4star_chars_char)
+                        # 获得非UP四星内容
+                        r = random.randint(1, 28)  # 11个角色 + 17个武器
+                        if r <= 11:
+                            # 获得非UP四星角色
+                            char_id = random.choice(std_4star_chars)
                             if char_id in owned_4star_chars:
                                 count = owned_4star_chars[char_id]
                                 if count < 7:
@@ -158,122 +120,119 @@ def simulate_task1(num_simulations):
                                 owned_4star_chars[char_id] = 1
                                 coral += 3
                         else:
-                            # 获得非UP四星内容
-                            r = random.randint(1, 28)
-                            if r <= 8:
-                                # 获得非UP四星角色
-                                char_id = random.choice(std_4star_chars[:8])
-                                if char_id in owned_4star_chars:
-                                    count = owned_4star_chars[char_id]
-                                    if count < 7:
-                                        coral += 3
-                                    else:
-                                        coral += 8
-                                    owned_4star_chars[char_id] += 1
-                                else:
-                                    owned_4star_chars[char_id] = 1
-                                    coral += 3
-                            else:
-                                # 获得四星武器
-                                coral += 3
-            else:
-                # 模拟武器池抽取
-                n5 = weapon_pity_5 + 1
-                prob_5 = P_weapon(n5)
-                if random.random() < prob_5:
-                    # 获得五星武器
-                    weapon_pity_5 = 0
-                    weapon_pity_4 = 0
-                    
-                    # 判断是否为UP武器
-                    if weapon_guaranteed_5_up:
+                            # 获得四星武器
+                            coral += 3
+        
+        # 再抽角色池直到获得1个角色本体和5个回音频段
+        while not (copies_of_up_char >= 1 and min(copies_of_up_char - 1, 6) >= 5):
+            paid_pulls += 1
+            
+            # 模拟角色池抽取
+            n5 = character_pity_5 + 1
+            prob_5 = P(n5)
+            if random.random() < prob_5:
+                # 获得五星角色
+                character_pity_5 = 0
+                character_pity_4 = 0
+                
+                # 判断是否为UP角色
+                if character_guaranteed_5_up:
+                    is_up = True
+                    character_guaranteed_5_up = False
+                else:
+                    if random.random() < 0.5:  # 50%概率为UP角色
                         is_up = True
-                        weapon_guaranteed_5_up = False
                     else:
-                        if random.random() < 0.75:
-                            is_up = True
-                        else:
-                            is_up = False
-                            weapon_guaranteed_5_up = True
-                    
-                    if is_up:
-                        # 获得UP武器
-                        if weapon_fate_points == 2 or random.random() < 0.5:
-                            # 获得目标UP武器
-                            weapon_id = up_5star_weapon
-                            copies_of_up_weapon += 1
-                            weapon_fate_points = 0
-                        else:
-                            # 获得非目标UP武器
-                            weapon_id = f"up_5weapon_other"
-                            weapon_fate_points = min(weapon_fate_points + 1, 2)
-                    else:
-                        # 获得非UP武器
-                        weapon_id = random.choice(std_5star_weapons)
+                        is_up = False
+                        character_guaranteed_5_up = True
+                
+                if is_up:
+                    # 获得UP角色
+                    char_id = up_5star_char
+                    copies_of_up_char += 1
                     
                     # 计算珊瑚
-                    if weapon_id in owned_5star_weapons:
-                        count = owned_5star_weapons[weapon_id]
+                    if char_id in owned_5star_chars:
+                        count = owned_5star_chars[char_id]
                         if count < 7:
                             coral += 15
                         else:
                             coral += 40
-                        owned_5star_weapons[weapon_id] += 1
+                        owned_5star_chars[char_id] += 1
                     else:
-                        owned_5star_weapons[weapon_id] = 1
+                        owned_5star_chars[char_id] = 1
                         coral += 15
                 else:
-                    weapon_pity_5 = n5
-                    
-                    # 检查四星
-                    if weapon_pity_4 >= 9:
-                        obtained_4star = True
-                        weapon_pity_4 = 0
+                    # 获得非UP角色
+                    char_id = random.choice(std_5star_chars)
+                    if char_id in owned_5star_chars:
+                        count = owned_5star_chars[char_id]
+                        if count < 7:
+                            coral += 15
+                        else:
+                            coral += 40
+                        owned_5star_chars[char_id] += 1
                     else:
-                        if random.random() < 0.06:
-                            obtained_4star = True
-                            weapon_pity_4 = 0
-                        else:
-                            obtained_4star = False
-                            weapon_pity_4 += 1
-                    
-                    if obtained_4star:
-                        if weapon_guaranteed_4_up:
+                        owned_5star_chars[char_id] = 1
+                        coral += 15
+            else:
+                character_pity_5 = n5
+                
+                # 检查四星
+                if character_pity_4 >= 9:
+                    obtained_4star = True
+                    character_pity_4 = 0
+                else:
+                    if random.random() < 0.06:
+                        obtained_4star = True
+                        character_pity_4 = 0
+                    else:
+                        obtained_4star = False
+                        character_pity_4 += 1
+                
+                if obtained_4star:
+                    if character_guaranteed_4_up:
+                        is_up = True
+                        character_guaranteed_4_up = False
+                    else:
+                        if random.random() < 0.5:  # 50%概率为UP角色
                             is_up = True
-                            weapon_guaranteed_4_up = False
                         else:
-                            if random.random() < 0.75:
-                                is_up = True
+                            is_up = False
+                            character_guaranteed_4_up = True
+                    
+                    if is_up:
+                        # 获得UP四星角色
+                        char_id = random.choice(up_4star_chars)
+                        if char_id in owned_4star_chars:
+                            count = owned_4star_chars[char_id]
+                            if count < 7:
+                                coral += 3
                             else:
-                                is_up = False
-                                weapon_guaranteed_4_up = True
-                        
-                        if is_up:
-                            # 获得UP四星武器
-                            weapon_id = random.choice(up_4star_weapons)
-                            if weapon_id in owned_4star_weapons:
-                                count = owned_4star_weapons[weapon_id]
+                                coral += 8
+                            owned_4star_chars[char_id] += 1
+                        else:
+                            owned_4star_chars[char_id] = 1
+                            coral += 3
+                    else:
+                        # 获得非UP四星内容
+                        r = random.randint(1, 28)  # 8个角色 + 20个武器
+                        if r <= 8:
+                            # 获得非UP四星角色
+                            char_id = random.choice(std_4star_chars)
+                            if char_id in owned_4star_chars:
+                                count = owned_4star_chars[char_id]
                                 if count < 7:
                                     coral += 3
                                 else:
                                     coral += 8
-                                owned_4star_weapons[weapon_id] += 1
+                                owned_4star_chars[char_id] += 1
                             else:
-                                owned_4star_weapons[weapon_id] = 1
+                                owned_4star_chars[char_id] = 1
                                 coral += 3
                         else:
-                            # 获得非UP四星武器
-                            weapon_id = random.choice(std_4star_weapons)
-                            if weapon_id in owned_4star_weapons:
-                                count = owned_4star_weapons[weapon_id]
-                                if count < 7:
-                                    coral += 3
-                                else:
-                                    coral += 8
-                                owned_4star_weapons[weapon_id] += 1
-                            else:
-                                owned_4star_weapons[weapon_id] = 1
-                                coral += 3
+                            # 获得四星武器
+                            coral += 3
         
         total_paid_pulls += paid_pulls
         total_coral += coral
@@ -281,7 +240,7 @@ def simulate_task1(num_simulations):
     return total_paid_pulls, total_coral
 
 def simulate_task2(num_simulations):
-    """情况2: 每满8个珊瑚就兑换一次抽数，抽取一个角色本体与六个回音频段+1把武器"""
+    """情况2: 优先抽取武器池，再抽角色池，每满8个珊瑚就兑换一次抽数"""
     total_paid_pulls = 0
     total_remaining_coral = 0
     
@@ -289,122 +248,98 @@ def simulate_task2(num_simulations):
         paid_pulls = 0
         coral = 0
         exchange_pulls = 0
+        
+        # 角色池状态
         character_pity_5 = 0
         character_pity_4 = 0
-        weapon_pity_5 = 0
-        weapon_pity_4 = 0
         character_guaranteed_4_up = False
         character_guaranteed_5_up = False
+        
+        # 武器池状态
+        weapon_pity_5 = 0
+        weapon_pity_4 = 0
         weapon_guaranteed_4_up = False
-        weapon_guaranteed_5_up = False
-        weapon_fate_points = 0
+        
+        # 拥有的角色和武器记录
         owned_4star_chars = {}
         owned_5star_chars = {}
         owned_4star_weapons = {}
-        owned_5star_weapons = {}
+        
+        # 目标计数
         copies_of_up_char = 0
         copies_of_up_weapon = 0
         
         # 角色列表
-        std_4star_chars = [f"std_4char_{i}" for i in range(1, 20)]
-        up_4star_chars_char = [f"up_4char_{i}" for i in range(1, 4)]
+        std_4star_chars = [f"std_4char_{i}" for i in range(1, 9)]  # 8个非UP角色
+        up_4star_chars = [f"up_4char_{i}" for i in range(1, 4)]    # 3个UP角色
         up_5star_char = "up_5char"
-        std_5star_chars = [f"std_5char_{i}" for i in range(1, 6)]
+        std_5star_chars = [f"std_5char_{i}" for i in range(1, 6)]  # 5个非UP五星角色
         
         # 武器列表
-        std_4star_weapons = [f"std_4weapon_{i}" for i in range(1, 21)]
-        up_4star_weapons = [f"up_4weapon_{i}" for i in range(1, 6)]
+        std_4star_weapons = [f"std_4weapon_{i}" for i in range(1, 21)]  # 20个非UP武器
+        up_4star_weapons = [f"up_4weapon_{i}" for i in range(1, 4)]     # 3个UP武器
         up_5star_weapon = "up_5weapon"
-        std_5star_weapons = [f"std_5weapon_{i}" for i in range(1, 6)]
         
-        # 抽取直到获得1个角色本体和6个回音频段+1把武器
-        while not (copies_of_up_char >= 1 and min(copies_of_up_char - 1, 6) >= 6 and copies_of_up_weapon >= 1):
+        # 抽取顺序：先武器池，再角色池
+        # 先抽武器池直到获得1把武器
+        while copies_of_up_weapon < 1:
             # 检查是否有兑换的抽数可用
             if exchange_pulls > 0:
                 exchange_pulls -= 1
             else:
                 paid_pulls += 1
             
-            # 决定抽角色池还是武器池
-            # 如果角色未完成，优先抽角色池
-            if copies_of_up_char < 7:
-                # 模拟角色池抽取
-                n5 = character_pity_5 + 1
-                prob_5 = P(n5)
-                if random.random() < prob_5:
-                    # 获得五星角色
-                    character_pity_5 = 0
-                    character_pity_4 = 0
-                    
-                    # 判断是否为UP角色
-                    if character_guaranteed_5_up:
-                        is_up = True
-                        character_guaranteed_5_up = False
+            # 模拟武器池抽取
+            n5 = weapon_pity_5 + 1
+            prob_5 = P(n5)
+            if random.random() < prob_5:
+                # 获得五星武器 - 必为当期UP武器，且必定为目标武器
+                weapon_pity_5 = 0
+                weapon_pity_4 = 0
+                
+                # 获得UP武器
+                weapon_id = up_5star_weapon
+                copies_of_up_weapon += 1
+                
+                # 计算珊瑚 - 每次获取五星武器固定15珊瑚
+                coral += 15
+            else:
+                weapon_pity_5 = n5
+                
+                # 检查四星
+                if weapon_pity_4 >= 9:
+                    obtained_4star = True
+                    weapon_pity_4 = 0
+                else:
+                    if random.random() < 0.06:
+                        obtained_4star = True
+                        weapon_pity_4 = 0
                     else:
-                        if random.random() < 0.5:
+                        obtained_4star = False
+                        weapon_pity_4 += 1
+                
+                if obtained_4star:
+                    if weapon_guaranteed_4_up:
+                        is_up = True
+                        weapon_guaranteed_4_up = False
+                    else:
+                        if random.random() < 0.5:  # 50%概率为UP武器
                             is_up = True
                         else:
                             is_up = False
-                            character_guaranteed_5_up = True
+                            weapon_guaranteed_4_up = True
                     
                     if is_up:
-                        # 获得UP角色
-                        char_id = up_5star_char
-                        copies_of_up_char += 1
-                        
-                        # 计算珊瑚
-                        if char_id in owned_5star_chars:
-                            count = owned_5star_chars[char_id]
-                            if count < 7:
-                                coral += 15
-                            else:
-                                coral += 40
-                            owned_5star_chars[char_id] += 1
-                        else:
-                            owned_5star_chars[char_id] = 1
-                            coral += 15
+                        # 获得UP四星武器
+                        weapon_id = random.choice(up_4star_weapons)
+                        # 计算珊瑚 - 每次获取四星武器固定3珊瑚
+                        coral += 3
                     else:
-                        # 获得非UP角色
-                        char_id = random.choice(std_5star_chars)
-                        if char_id in owned_5star_chars:
-                            count = owned_5star_chars[char_id]
-                            if count < 7:
-                                coral += 15
-                            else:
-                                coral += 40
-                            owned_5star_chars[char_id] += 1
-                        else:
-                            owned_5star_chars[char_id] = 1
-                            coral += 15
-                else:
-                    character_pity_5 = n5
-                    
-                    # 检查四星
-                    if character_pity_4 >= 9:
-                        obtained_4star = True
-                        character_pity_4 = 0
-                    else:
-                        if random.random() < 0.06:
-                            obtained_4star = True
-                            character_pity_4 = 0
-                        else:
-                            obtained_4star = False
-                            character_pity_4 += 1
-                    
-                    if obtained_4star:
-                        if character_guaranteed_4_up:
-                            is_up = True
-                            character_guaranteed_4_up = False
-                        else:
-                            if random.random() < 0.5:
-                                is_up = True
-                            else:
-                                is_up = False
-                                character_guaranteed_4_up = True
-                        
-                        if is_up:
-                            # 获得UP四星角色
-                            char_id = random.choice(up_4star_chars_char)
+                        # 获得非UP四星内容
+                        r = random.randint(1, 28)  # 11个角色 + 17个武器
+                        if r <= 11:
+                            # 获得非UP四星角色
+                            char_id = random.choice(std_4star_chars)
                             if char_id in owned_4star_chars:
                                 count = owned_4star_chars[char_id]
                                 if count < 7:
@@ -416,122 +351,128 @@ def simulate_task2(num_simulations):
                                 owned_4star_chars[char_id] = 1
                                 coral += 3
                         else:
-                            # 获得非UP四星内容
-                            r = random.randint(1, 28)
-                            if r <= 8:
-                                # 获得非UP四星角色
-                                char_id = random.choice(std_4star_chars[:8])
-                                if char_id in owned_4star_chars:
-                                    count = owned_4star_chars[char_id]
-                                    if count < 7:
-                                        coral += 3
-                                    else:
-                                        coral += 8
-                                    owned_4star_chars[char_id] += 1
-                                else:
-                                    owned_4star_chars[char_id] = 1
-                                    coral += 3
-                            else:
-                                # 获得四星武器
-                                coral += 3
+                            # 获得四星武器
+                            coral += 3
+            
+            # 每满8个珊瑚就兑换一次抽数
+            while coral >= 8:
+                coral -= 8
+                exchange_pulls += 1
+        
+        # 再抽角色池直到获得1个角色本体和6个回音频段
+        while not (copies_of_up_char >= 1 and min(copies_of_up_char - 1, 6) >= 6):
+            # 检查是否有兑换的抽数可用
+            if exchange_pulls > 0:
+                exchange_pulls -= 1
             else:
-                # 模拟武器池抽取
-                n5 = weapon_pity_5 + 1
-                prob_5 = P_weapon(n5)
-                if random.random() < prob_5:
-                    # 获得五星武器
-                    weapon_pity_5 = 0
-                    weapon_pity_4 = 0
-                    
-                    # 判断是否为UP武器
-                    if weapon_guaranteed_5_up:
+                paid_pulls += 1
+            
+            # 模拟角色池抽取
+            n5 = character_pity_5 + 1
+            prob_5 = P(n5)
+            if random.random() < prob_5:
+                # 获得五星角色
+                character_pity_5 = 0
+                character_pity_4 = 0
+                
+                # 判断是否为UP角色
+                if character_guaranteed_5_up:
+                    is_up = True
+                    character_guaranteed_5_up = False
+                else:
+                    if random.random() < 0.5:  # 50%概率为UP角色
                         is_up = True
-                        weapon_guaranteed_5_up = False
                     else:
-                        if random.random() < 0.75:
-                            is_up = True
-                        else:
-                            is_up = False
-                            weapon_guaranteed_5_up = True
-                    
-                    if is_up:
-                        # 获得UP武器
-                        if weapon_fate_points == 2 or random.random() < 0.5:
-                            # 获得目标UP武器
-                            weapon_id = up_5star_weapon
-                            copies_of_up_weapon += 1
-                            weapon_fate_points = 0
-                        else:
-                            # 获得非目标UP武器
-                            weapon_id = f"up_5weapon_other"
-                            weapon_fate_points = min(weapon_fate_points + 1, 2)
-                    else:
-                        # 获得非UP武器
-                        weapon_id = random.choice(std_5star_weapons)
+                        is_up = False
+                        character_guaranteed_5_up = True
+                
+                if is_up:
+                    # 获得UP角色
+                    char_id = up_5star_char
+                    copies_of_up_char += 1
                     
                     # 计算珊瑚
-                    if weapon_id in owned_5star_weapons:
-                        count = owned_5star_weapons[weapon_id]
+                    if char_id in owned_5star_chars:
+                        count = owned_5star_chars[char_id]
                         if count < 7:
                             coral += 15
                         else:
                             coral += 40
-                        owned_5star_weapons[weapon_id] += 1
+                        owned_5star_chars[char_id] += 1
                     else:
-                        owned_5star_weapons[weapon_id] = 1
+                        owned_5star_chars[char_id] = 1
                         coral += 15
                 else:
-                    weapon_pity_5 = n5
-                    
-                    # 检查四星
-                    if weapon_pity_4 >= 9:
-                        obtained_4star = True
-                        weapon_pity_4 = 0
+                    # 获得非UP角色
+                    char_id = random.choice(std_5star_chars)
+                    if char_id in owned_5star_chars:
+                        count = owned_5star_chars[char_id]
+                        if count < 7:
+                            coral += 15
+                        else:
+                            coral += 40
+                        owned_5star_chars[char_id] += 1
                     else:
-                        if random.random() < 0.06:
-                            obtained_4star = True
-                            weapon_pity_4 = 0
-                        else:
-                            obtained_4star = False
-                            weapon_pity_4 += 1
-                    
-                    if obtained_4star:
-                        if weapon_guaranteed_4_up:
+                        owned_5star_chars[char_id] = 1
+                        coral += 15
+            else:
+                character_pity_5 = n5
+                
+                # 检查四星
+                if character_pity_4 >= 9:
+                    obtained_4star = True
+                    character_pity_4 = 0
+                else:
+                    if random.random() < 0.06:
+                        obtained_4star = True
+                        character_pity_4 = 0
+                    else:
+                        obtained_4star = False
+                        character_pity_4 += 1
+                
+                if obtained_4star:
+                    if character_guaranteed_4_up:
+                        is_up = True
+                        character_guaranteed_4_up = False
+                    else:
+                        if random.random() < 0.5:  # 50%概率为UP角色
                             is_up = True
-                            weapon_guaranteed_4_up = False
                         else:
-                            if random.random() < 0.75:
-                                is_up = True
+                            is_up = False
+                            character_guaranteed_4_up = True
+                    
+                    if is_up:
+                        # 获得UP四星角色
+                        char_id = random.choice(up_4star_chars)
+                        if char_id in owned_4star_chars:
+                            count = owned_4star_chars[char_id]
+                            if count < 7:
+                                coral += 3
                             else:
-                                is_up = False
-                                weapon_guaranteed_4_up = True
-                        
-                        if is_up:
-                            # 获得UP四星武器
-                            weapon_id = random.choice(up_4star_weapons)
-                            if weapon_id in owned_4star_weapons:
-                                count = owned_4star_weapons[weapon_id]
+                                coral += 8
+                            owned_4star_chars[char_id] += 1
+                        else:
+                            owned_4star_chars[char_id] = 1
+                            coral += 3
+                    else:
+                        # 获得非UP四星内容
+                        r = random.randint(1, 28)  # 8个角色 + 20个武器
+                        if r <= 8:
+                            # 获得非UP四星角色
+                            char_id = random.choice(std_4star_chars)
+                            if char_id in owned_4star_chars:
+                                count = owned_4star_chars[char_id]
                                 if count < 7:
                                     coral += 3
                                 else:
                                     coral += 8
-                                owned_4star_weapons[weapon_id] += 1
+                                owned_4star_chars[char_id] += 1
                             else:
-                                owned_4star_weapons[weapon_id] = 1
+                                owned_4star_chars[char_id] = 1
                                 coral += 3
                         else:
-                            # 获得非UP四星武器
-                            weapon_id = random.choice(std_4star_weapons)
-                            if weapon_id in owned_4star_weapons:
-                                count = owned_4star_weapons[weapon_id]
-                                if count < 7:
-                                    coral += 3
-                                else:
-                                    coral += 8
-                                owned_4star_weapons[weapon_id] += 1
-                            else:
-                                owned_4star_weapons[weapon_id] = 1
-                                coral += 3
+                            # 获得四星武器
+                            coral += 3
             
             # 每满8个珊瑚就兑换一次抽数
             while coral >= 8:
@@ -551,8 +492,8 @@ def run_simulations():
     print(f"使用 {num_cores} 个核心进行 {num_simulations} 次模拟...")
     print()
     
-    # 模拟情况1: 抽取一个角色本体与五个回音频段+1把武器，不使用珊瑚
-    print("正在模拟情况1: 抽取一个角色本体与五个回音频段+1把武器，不使用珊瑚...")
+    # 模拟情况1: 优先抽取武器池，再抽角色池，不使用珊瑚
+    print("正在模拟情况1: 优先抽取武器池，再抽角色池，不使用珊瑚...")
     
     # 分割任务到多个核心
     chunk_size = num_simulations // num_cores
@@ -572,8 +513,8 @@ def run_simulations():
     print(f"情况1 - 平均所得珊瑚数: {average_coral_1:.2f}")
     print()
     
-    # 模拟情况2: 每满8个珊瑚就兑换一次抽数，抽取一个角色本体与六个回音频段+1把武器
-    print("正在模拟情况2: 每满8个珊瑚就兑换一次抽数，抽取一个角色本体与六个回音频段+1把武器...")
+    # 模拟情况2: 优先抽取武器池，再抽角色池，每满8个珊瑚就兑换一次抽数
+    print("正在模拟情况2: 优先抽取武器池，再抽角色池，每满8个珊瑚就兑换一次抽数...")
     
     # 分割任务到多个核心
     with mp.Pool(processes=num_cores) as pool:
